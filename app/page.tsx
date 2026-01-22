@@ -2,9 +2,17 @@
 
 import { useState, useRef } from 'react'
 
+type LogEntry = {
+  transcript: string
+  category: string
+  destination: string
+  timestamp: string
+}
+
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false)
-  const [status, setStatus] = useState('')
+  const [result, setResult] = useState<any>(null)
+  const [log, setLog] = useState<LogEntry[]>([])
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -28,13 +36,12 @@ export default function Home() {
 
       mediaRecorder.start()
       setIsRecording(true)
-      setStatus('Recording...')
 
       timerRef.current = setTimeout(() => {
         stopRecording()
       }, 10000)
     } catch (err) {
-      setStatus('Microphone access denied')
+      setResult({ error: 'Microphone access denied' })
     }
   }
 
@@ -47,7 +54,7 @@ export default function Home() {
   }
 
   const processAudio = async (audioBlob: Blob) => {
-    setStatus('Processing...')
+    setResult({ processing: true })
     const formData = new FormData()
     formData.append('audio', audioBlob, 'recording.webm')
 
@@ -59,13 +66,18 @@ export default function Home() {
       const data = await res.json()
       
       if (res.ok) {
-        setStatus(`✓ Saved as ${data.category}`)
-        setTimeout(() => setStatus(''), 3000)
+        setResult(data)
+        setLog(prev => [{
+          transcript: data.content.substring(0, 50) + '...',
+          category: data.category,
+          destination: data.destination,
+          timestamp: new Date().toLocaleTimeString()
+        }, ...prev].slice(0, 3))
       } else {
-        setStatus(`Error: ${data.error}`)
+        setResult({ error: data.error })
       }
     } catch (err) {
-      setStatus('Failed to process')
+      setResult({ error: 'Failed to process' })
     }
   }
 
@@ -78,8 +90,8 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6">
-      <div className="flex flex-col items-center gap-8">
+    <main className="flex min-h-screen flex-col items-center justify-between p-6">
+      <div className="flex-1 flex flex-col items-center justify-center gap-8 w-full max-w-md">
         <button
           onClick={handleClick}
           className={`w-48 h-48 rounded-full bg-white shadow-2xl flex items-center justify-center text-gray-800 font-semibold text-xl transition-all ${
@@ -88,10 +100,45 @@ export default function Home() {
         >
           {isRecording ? 'Stop' : 'Record'}
         </button>
-        {status && (
-          <p className="text-white text-lg font-medium">{status}</p>
+        
+        {result?.processing && (
+          <p className="text-white text-lg">Processing...</p>
+        )}
+        
+        {result?.transcript && (
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 w-full text-white space-y-3">
+            <div>
+              <p className="text-sm opacity-75">Transcription:</p>
+              <p className="font-medium">I heard: "{result.transcript}"</p>
+            </div>
+            <div>
+              <p className="text-sm opacity-75">Reasoning:</p>
+              <p className="font-medium">Classification: {result.category}. Confidence: {result.confidence}%.</p>
+            </div>
+            <div>
+              <p className="text-sm opacity-75">Destination:</p>
+              <p className="font-medium">Status: Sent to {result.destination}.</p>
+            </div>
+          </div>
+        )}
+        
+        {result?.error && (
+          <p className="text-red-300 text-lg">{result.error}</p>
         )}
       </div>
+      
+      {log.length > 0 && (
+        <div className="w-full max-w-md bg-white/5 backdrop-blur-sm rounded-lg p-4">
+          <p className="text-white text-sm opacity-75 mb-2">Recent Activity</p>
+          <div className="space-y-2">
+            {log.map((entry, i) => (
+              <div key={i} className="text-white text-xs opacity-90">
+                <span className="font-medium">{entry.timestamp}</span> - {entry.category} → {entry.destination}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </main>
   )
 }

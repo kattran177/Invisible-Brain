@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: 'You are a classifier. Analyze the text and return ONLY a JSON object with two fields: "category" (must be exactly "Task", "Issue", or "Idea") and "content" (a cleaned-up version of the text). No other text.',
+          content: 'You are a classifier. Analyze the text and return ONLY a JSON object with three fields: "category" (must be exactly "Task", "Issue", or "Idea"), "content" (a cleaned-up version of the text), and "confidence" (a number between 0-100). No other text.',
         },
         {
           role: 'user',
@@ -38,8 +38,9 @@ export async function POST(req: NextRequest) {
     })
 
     const result = JSON.parse(completion.choices[0].message.content || '{}')
-    const { category, content } = result
+    const { category, content, confidence } = result
 
+    let destination = ''
     // Send to Notion or GitHub based on category
     if (category === 'Task' || category === 'Idea') {
       await notion.pages.create({
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
           Category: { select: { name: category } },
         },
       })
+      destination = 'Notion'
     } else if (category === 'Issue') {
       await octokit.issues.create({
         owner: process.env.GITHUB_REPO_OWNER!,
@@ -56,9 +58,10 @@ export async function POST(req: NextRequest) {
         title: content.substring(0, 100),
         body: content,
       })
+      destination = 'GitHub Issues'
     }
 
-    return NextResponse.json({ category, content })
+    return NextResponse.json({ transcript, category, content, confidence, destination })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
