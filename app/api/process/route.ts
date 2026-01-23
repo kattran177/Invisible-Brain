@@ -7,10 +7,18 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 const notion = new Client({ auth: process.env.NOTION_API_KEY })
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN })
 
+const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25MB limit
+const MAX_AUDIO_DURATION = 300 // 5 minutes in seconds
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const audioFile = formData.get('audio') as Blob
+
+    // Check file size
+    if (audioFile.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'Audio file too large (max 25MB)' }, { status: 400 })
+    }
 
     // Transcribe with Groq Whisper
     const transcription = await groq.audio.transcriptions.create({

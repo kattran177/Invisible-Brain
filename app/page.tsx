@@ -13,9 +13,12 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [log, setLog] = useState<LogEntry[]>([])
+  const [recordingTime, setRecordingTime] = useState(0)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const maxDurationRef = useRef<NodeJS.Timeout | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const startRecording = async () => {
     try {
@@ -36,10 +39,22 @@ export default function Home() {
 
       mediaRecorder.start()
       setIsRecording(true)
+      setRecordingTime(0)
 
+      // Update recording time every second
+      intervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1)
+      }, 1000)
+
+      // Auto-stop after 10 seconds
       timerRef.current = setTimeout(() => {
         stopRecording()
       }, 10000)
+
+      // Hard limit: 5 minutes
+      maxDurationRef.current = setTimeout(() => {
+        stopRecording()
+      }, 300000)
     } catch (err) {
       setResult({ error: 'Microphone access denied' })
     }
@@ -50,6 +65,9 @@ export default function Home() {
       mediaRecorderRef.current.stop()
       setIsRecording(false)
       if (timerRef.current) clearTimeout(timerRef.current)
+      if (maxDurationRef.current) clearTimeout(maxDurationRef.current)
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      setRecordingTime(0)
     }
   }
 
@@ -98,7 +116,7 @@ export default function Home() {
             isRecording ? 'animate-pulse scale-110' : 'hover:scale-105'
           }`}
         >
-          {isRecording ? 'Stop' : 'Record'}
+          {isRecording ? `${recordingTime}s` : 'Record'}
         </button>
         
         {result?.processing && (
